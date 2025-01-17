@@ -9,6 +9,7 @@ import (
 	"imagetag/internal/tagging"
 	"log"
 	"net/http"
+	"strings"
 )
 
 //go:embed templates/*
@@ -16,7 +17,11 @@ var templateFs embed.FS
 
 func BuildRouter(interrogator *tagging.InterrogateForever) *chi.Mux {
 
-	tmpl, err := template.ParseFS(templateFs, "templates/index.html")
+	indexTmpl, err := template.ParseFS(templateFs, "templates/index.html")
+	if err != nil {
+		log.Panicf("Error parsing templates: %v", err)
+	}
+	respTmpl, err := template.ParseFS(templateFs, "templates/response.html")
 	if err != nil {
 		log.Panicf("Error parsing templates: %v", err)
 	}
@@ -31,13 +36,51 @@ func BuildRouter(interrogator *tagging.InterrogateForever) *chi.Mux {
 		data := struct {
 		}{}
 
-		if err := tmpl.Execute(w, data); err != nil {
+		if err := indexTmpl.Execute(w, data); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
 
+	handleResults := func(w http.ResponseWriter, r *http.Request, result tagging.JobResult) {
+		acceptHeader := r.Header.Get("Accept")
+
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		w.Header().Set("X-XSS-Protection", "1")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if acceptsJson(acceptHeader) {
+			w.Header().Set("Content-Type", "application/json")
+			if result.Error != nil {
+				http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			if err := json.NewEncoder(w).Encode(result.Tags); err != nil {
+				http.Error(w, "failed to encode JSON", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			data := struct {
+				Tags []string
+			}{
+				Tags: result.Tags,
+			}
+
+			if err := respTmpl.Execute(w, data); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}
+
+	}
+
 	r.Post("/api/v1/tag-image", func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseMultipartForm(10 << 20); err != nil { // Limit upload size to 10MB
+		if err := r.ParseMultipartForm(10 << 20); err != nil { // Limit memory usage to 10MB
 			http.Error(w, "File too big or malformed", http.StatusBadRequest)
 			return
 		}
@@ -69,16 +112,7 @@ func BuildRouter(interrogator *tagging.InterrogateForever) *chi.Mux {
 					http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 					return
 				}
-				w.Header().Set("Content-Type", "application/json")
-				if result.Error != nil {
-					http.Error(w, result.Error.Error(), http.StatusInternalServerError)
-					return
-				}
-
-				if err := json.NewEncoder(w).Encode(result.Tags); err != nil {
-					http.Error(w, "failed to encode JSON", http.StatusInternalServerError)
-					return
-				}
+				handleResults(w, r, result)
 				return
 
 			}
@@ -89,4 +123,17 @@ func BuildRouter(interrogator *tagging.InterrogateForever) *chi.Mux {
 
 	return r
 
+}
+
+func acceptsJson(acceptHeader string) bool {
+	parts := strings.Split(acceptHeader, ",")
+	for _, part := range parts {
+		if part == "*/*" {
+			return true
+		}
+		if strings.Contains(part, "application/json") {
+			return true
+		}
+	}
+	return false
 }

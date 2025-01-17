@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tags</title>
+</head>
+<body>
+<div>
+    <a href="/">Submit another</a>
+</div>
+<div>
+    <ul>
+        {{ range .Tags }}
+        <li> {{ . }}</li>
+        {{ end }}
+    </ul>
+</div>
+
+</body>
+</html>
