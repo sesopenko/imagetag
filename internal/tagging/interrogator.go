@@ -12,12 +12,20 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
 type JobResult struct {
 	Tags  []string
 	Error error
+}
+
+type ResultFile struct {
+	JobId string   `json:"job_id"`
+	Model string   `json:"model"`
+	Tags  []string `json:"tags"`
+	Error string   `json:"error"`
 }
 
 type jobSpec struct {
@@ -42,7 +50,7 @@ func BuildAndStart(inputPath string, outputPath string) *InterrogateForever {
 	return &i
 }
 
-func (interrogate *InterrogateForever) TagImage(imageFile multipart.File) (chan JobResult, func(), error) {
+func (i *InterrogateForever) TagImage(imageFile multipart.File) (chan JobResult, func(), error) {
 
 	mimeType, err := detectMimeType(imageFile)
 	if err != nil {
@@ -55,20 +63,20 @@ func (interrogate *InterrogateForever) TagImage(imageFile multipart.File) (chan 
 	responseChan := make(chan JobResult)
 	id := uuid.New().String()
 	cancel := func() {
-		interrogate.jobMutex.Lock()
-		delete(interrogate.jobs, id)
-		interrogate.jobMutex.Unlock()
+		i.jobMutex.Lock()
+		delete(i.jobs, id)
+		i.jobMutex.Unlock()
 	}
 	go func() {
 
 		imageFilename := fmt.Sprintf("%s.%s", id, extension)
 		// Listen for output
-		interrogate.jobMutex.Lock()
-		interrogate.jobs[id] = responseChan
-		interrogate.jobMutex.Unlock()
+		i.jobMutex.Lock()
+		i.jobs[id] = responseChan
+		i.jobMutex.Unlock()
 
 		// Create file
-		err := interrogate.createJob(id, imageFile, imageFilename)
+		err := i.createJob(id, imageFile, imageFilename)
 		if err != nil {
 			responseChan <- JobResult{nil, err}
 		}
@@ -77,9 +85,9 @@ func (interrogate *InterrogateForever) TagImage(imageFile multipart.File) (chan 
 	return responseChan, cancel, nil
 }
 
-func (interrogate *InterrogateForever) createJob(jobId string, imageFile multipart.File, imageFilename string) error {
+func (i *InterrogateForever) createJob(jobId string, imageFile multipart.File, imageFilename string) error {
 	zipFilename := fmt.Sprintf("%s.zip", jobId)
-	targetPath := filepath.Join(interrogate.InputPath, zipFilename)
+	targetPath := filepath.Join(i.InputPath, zipFilename)
 	zipFile, err := os.Create(targetPath)
 	if err != nil {
 		return fmt.Errorf("could not create zip file: %s", err)
@@ -117,8 +125,8 @@ func (interrogate *InterrogateForever) createJob(jobId string, imageFile multipa
 
 }
 
-func (interrogate *InterrogateForever) Start() {
-	interrogate.jobs = make(map[string]chan JobResult)
+func (i *InterrogateForever) Start() {
+	i.jobs = make(map[string]chan JobResult)
 	go func() {
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
@@ -136,6 +144,7 @@ func (interrogate *InterrogateForever) Start() {
 					log.Println("event:", event)
 					if event.Has(fsnotify.Write) {
 						log.Println("modified file:", event.Name)
+						i.HandleResponse(event.Name)
 					}
 				case err, ok := <-watcher.Errors:
 					if !ok {
@@ -146,13 +155,71 @@ func (interrogate *InterrogateForever) Start() {
 			}
 		}()
 
-		err = watcher.Add(interrogate.OutputPath)
+		err = watcher.Add(i.OutputPath)
 		if err != nil {
 			log.Fatal(err)
 		}
 		// block go routine forever
 		<-make(chan struct{})
 	}()
+}
+
+func (i *InterrogateForever) HandleResponse(filePath string) {
+
+	filename := filepath.Base(filePath)
+	parts := strings.Split(filename, ".")
+	if len(parts) != 2 {
+		log.Printf("file not named correctly: %s", filename)
+		// todo: error and delete
+	}
+	id := parts[0]
+	file, err := os.Open(filePath)
+	if err != nil {
+		// todo: delete it
+		i.respondError(id, err)
+		log.Printf("could not open file: %s", err)
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+
+	var resultFile ResultFile
+
+	err = decoder.Decode(&resultFile)
+	if err != nil {
+		i.respondError(id, err)
+		log.Printf("could not decode file: %s", err)
+	}
+	i.respondSuccess(id, resultFile.Tags)
+	if err := os.Remove(filePath); err != nil {
+		log.Printf("could not remove file: %s", err)
+	}
+
+}
+
+func (i *InterrogateForever) respondSuccess(id string, tags []string) {
+	response := JobResult{
+		Tags:  tags,
+		Error: nil,
+	}
+	i.SendResponse(id, response)
+}
+
+func (i *InterrogateForever) respondError(id string, err error) {
+	response := JobResult{
+		Error: err,
+	}
+	i.SendResponse(id, response)
+}
+
+func (i *InterrogateForever) SendResponse(id string, response JobResult) {
+	i.jobMutex.Lock()
+	ch, exists := i.jobs[id]
+	if exists {
+
+		ch <- response
+		delete(i.jobs, id)
+	}
+	i.jobMutex.Unlock()
 }
 
 func detectMimeType(file multipart.File) (string, error) {

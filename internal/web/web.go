@@ -77,7 +77,9 @@ func BuildRouter(interrogator *tagging.InterrogateForever) *chi.Mux {
 
 				if err := json.NewEncoder(w).Encode(result.Tags); err != nil {
 					http.Error(w, "failed to encode JSON", http.StatusInternalServerError)
+					return
 				}
+				return
 
 			}
 
