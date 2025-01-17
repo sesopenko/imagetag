@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 	"io"
 	"log"
@@ -14,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 type JobResult struct {
@@ -126,46 +126,42 @@ func (i *InterrogateForever) createJob(jobId string, imageFile multipart.File, i
 }
 
 func (i *InterrogateForever) Start() {
-	i.jobs = make(map[string]chan JobResult)
+	i.jobs = map[string]chan JobResult{}
+	lastState := map[string]time.Time{}
 	go func() {
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer watcher.Close()
+		for {
+			entries, err := os.ReadDir(i.OutputPath)
+			if err != nil {
+				log.Printf("Error reading directory: %s", err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
 
-		go func() {
-			for {
-				select {
-				case event, ok := <-watcher.Events:
-					if !ok {
-						return
-					}
-					log.Println("event:", event)
-					if event.Has(fsnotify.Write) {
-						log.Println("modified file:", event.Name)
-						i.HandleResponse(event.Name)
-					}
-				case err, ok := <-watcher.Errors:
-					if !ok {
-						return
-					}
-					log.Println("error:", err)
+			currentState := map[string]time.Time{}
+			for _, entry := range entries {
+				info, err := entry.Info()
+				if err != nil {
+					log.Printf("Error getting file info: %s", err)
+					continue
+				}
+
+				currentState[info.Name()] = info.ModTime()
+				if modTime, ok := lastState[info.Name()]; !ok || modTime != info.ModTime() {
+					fullPath := filepath.Join(i.OutputPath, info.Name())
+					go i.HandleResponse(fullPath)
 				}
 			}
-		}()
 
-		err = watcher.Add(i.OutputPath)
-		if err != nil {
-			log.Fatal(err)
+			lastState = currentState
+			time.Sleep(50 * time.Millisecond)
+
 		}
-		// block go routine forever
-		<-make(chan struct{})
 	}()
+
 }
 
 func (i *InterrogateForever) HandleResponse(filePath string) {
-
+	time.Sleep(100 * time.Millisecond)
 	filename := filepath.Base(filePath)
 	parts := strings.Split(filename, ".")
 	if len(parts) != 2 {
@@ -190,6 +186,7 @@ func (i *InterrogateForever) HandleResponse(filePath string) {
 		log.Printf("could not decode file: %s", err)
 	}
 	i.respondSuccess(id, resultFile.Tags)
+	file.Close()
 	if err := os.Remove(filePath); err != nil {
 		log.Printf("could not remove file: %s", err)
 	}
