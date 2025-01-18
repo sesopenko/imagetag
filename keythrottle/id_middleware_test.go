@@ -9,10 +9,10 @@ import (
 
 func TestRequestIdInteger(t *testing.T) {
 	tests := map[string]struct {
-		startReqId       uint64
-		request          func() *http.Request
-		expectedResponse uint64
-		expectError      bool
+		startReqId        uint64
+		request           func() *http.Request
+		expectedRequestId uint64
+		expectError       bool
 	}{
 		"expected response": {
 			startReqId: 100,
@@ -22,8 +22,8 @@ func TestRequestIdInteger(t *testing.T) {
 
 				return req
 			},
-			expectedResponse: 101,
-			expectError:      false,
+			expectedRequestId: 101,
+			expectError:       false,
 		},
 	}
 
@@ -55,8 +55,8 @@ func TestRequestIdInteger(t *testing.T) {
 				if gotError {
 					t.Errorf("got an error")
 				}
-				if resultRequestId != test.expectedResponse {
-					t.Errorf("got %d, want %d", resultRequestId, test.expectedResponse)
+				if resultRequestId != test.expectedRequestId {
+					t.Errorf("got %d, want %d", resultRequestId, test.expectedRequestId)
 				}
 			}
 		})
