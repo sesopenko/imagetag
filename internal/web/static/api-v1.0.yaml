@@ -1,0 +1,45 @@
+openapi: 3.1.0
+info:
+  title: File Upload API
+  version: 1.0.0
+paths:
+  /api/v1/tag-image:
+    post:
+      summary: Get a list of items seen in an image via ML model
+      description: Accepts a single file upload via `multipart/form-data` with the file part named `image`. Returns an array of strings if `Accept` is `application/json`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: The image file to upload.
+              required:
+                - image
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+              example:
+                - "Tag1"
+                - "Tag2"
+                - "Tag3"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid file upload."

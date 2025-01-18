@@ -14,6 +14,30 @@ Completed functionality:
   * Watches interrogate_forever's output folder for the finished job
   * Correlates the interrogate_forever job back to the correct in-progress web request
 
+## Required Environment Variables
+
+This is destined to be ran from within a Docker container so configuration is to be passed in via environment variables.
+
+* `IMAGETAG_INPUT`: path to the input folder being watched by interrogate_forever
+* `IMAGETAG_OUTPUT`: path to the output folder interrogate_forever places the output json files into.
+
+## API
+
+[internal/web/static/api-v1.0.yaml](internal/web/static/api-v1.0.yaml)
+
+Serves on port 8080
+
+* 'POST' `http://localhost:8080/api/v1/tag-image`
+  * Supported Content-Type:
+    * `multipart/form-data`
+  * Supported Accept:
+    * `application/json`
+    * `test/html` (will return this if Accept not sent or is not applicatin/json)
+  * Post Details:
+    * File Part Fields:
+      * `image`: the image to process.  If multiple are uploaded, only processes the first.
+  * Will leave the request hanging as it's processing
+
 ## Licensed GNU GPL V3
 
 This is free, open source software, Licensed GNU GPL V3, readable in [LICENSE.txt](LICENSE.txt). The license should be distributed
