@@ -101,6 +101,21 @@ func TestKeyThrottle_GetTierFromKey(t *testing.T) {
 			},
 			want: TIER_UNAUTHENTICATED,
 		},
+		{
+			name: "empty key",
+			fields: fields{
+				tierA: map[string]struct{}{
+					"": struct{}{},
+				},
+				tierB: map[string]struct{}{
+					"2222": struct{}{},
+				},
+			},
+			args: args{
+				key: "",
+			},
+			want: TIER_UNAUTHENTICATED,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -112,6 +127,16 @@ func TestKeyThrottle_GetTierFromKey(t *testing.T) {
 				t.Errorf("GetTierFromKey() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestKeyThrottle_BuildKeyThrottle(t *testing.T) {
+	kt := BuildKeyThrottle()
+	if kt.tierA == nil {
+		t.Errorf("BuildKeyThrottle() tierA is nil")
+	}
+	if kt.tierB == nil {
+		t.Errorf("BuildKeyThrottle() tierB is nil")
 	}
 }
 
