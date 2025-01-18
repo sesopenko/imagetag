@@ -62,24 +62,24 @@ func (e RequestNotFoundError) Error() string {
 	return "request not found"
 }
 
-type ConnectedCustomer struct {
+type CustomerQueue struct {
 	queuedRequests []*QueuedRequest
 	mutex          sync.Mutex
 }
 
-func (c *ConnectedCustomer) Init() {
+func (c *CustomerQueue) Init() {
 	c.queuedRequests = []*QueuedRequest{}
 	c.mutex = sync.Mutex{}
 }
 
-func BuildConnectedCustomer() *ConnectedCustomer {
-	c := ConnectedCustomer{}
+func BuildConnectedCustomer() *CustomerQueue {
+	c := CustomerQueue{}
 	c.Init()
 	return &c
 
 }
 
-func (c *ConnectedCustomer) AddRequest(ctx context.Context) *HandlerMediator {
+func (c *CustomerQueue) AddRequest(ctx context.Context) *HandlerMediator {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	q := QueuedRequest{
@@ -110,7 +110,7 @@ func (c *ConnectedCustomer) AddRequest(ctx context.Context) *HandlerMediator {
 	return m
 }
 
-func (c *ConnectedCustomer) TryExecute() error {
+func (c *CustomerQueue) TryExecute() error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	foundIndex := -1
