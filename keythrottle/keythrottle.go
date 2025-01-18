@@ -15,21 +15,22 @@ type AuthTierStorage struct {
 	TierA map[string]string `json:"tier_a"`
 	TierB map[string]string `json:"tier_b"`
 }
-type KeyThrottle struct {
+type KeyStore struct {
+	// Maps of empty strucks are incredibly fast.  It'll be a hashmap of 0 byte size objects.
 	tierA     map[string]struct{}
 	tierB     map[string]struct{}
 	tierMutex sync.Mutex
 }
 
-func BuildKeyThrottle() *KeyThrottle {
-	return &KeyThrottle{
+func BuildKeyStore() *KeyStore {
+	return &KeyStore{
 		tierA:     make(map[string]struct{}),
 		tierB:     make(map[string]struct{}),
 		tierMutex: sync.Mutex{},
 	}
 }
 
-func (kt *KeyThrottle) SetTiers(tiers AuthTierStorage) error {
+func (kt *KeyStore) SetTiers(tiers AuthTierStorage) error {
 	if tiers.TierB == nil {
 		return fmt.Errorf("tier_b is nil")
 	}
@@ -51,7 +52,7 @@ func (kt *KeyThrottle) SetTiers(tiers AuthTierStorage) error {
 	return nil
 }
 
-func (kt *KeyThrottle) GetTierFromKey(key string) Tier {
+func (kt *KeyStore) GetTierFromKey(key string) Tier {
 	if key == "" {
 		return TIER_UNAUTHENTICATED
 	}

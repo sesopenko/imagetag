@@ -119,7 +119,7 @@ func TestKeyThrottle_GetTierFromKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			kt := &KeyThrottle{
+			kt := &KeyStore{
 				tierA: tt.fields.tierA,
 				tierB: tt.fields.tierB,
 			}
@@ -131,12 +131,12 @@ func TestKeyThrottle_GetTierFromKey(t *testing.T) {
 }
 
 func TestKeyThrottle_BuildKeyThrottle(t *testing.T) {
-	kt := BuildKeyThrottle()
+	kt := BuildKeyStore()
 	if kt.tierA == nil {
-		t.Errorf("BuildKeyThrottle() tierA is nil")
+		t.Errorf("BuildKeyStore() tierA is nil")
 	}
 	if kt.tierB == nil {
-		t.Errorf("BuildKeyThrottle() tierB is nil")
+		t.Errorf("BuildKeyStore() tierB is nil")
 	}
 }
 
@@ -265,7 +265,7 @@ func TestKeyThrottle_SetTiers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			kt := &KeyThrottle{
+			kt := &KeyStore{
 				tierA: tt.fields.tierA,
 				tierB: tt.fields.tierB,
 			}
